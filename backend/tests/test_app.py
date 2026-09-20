@@ -13,29 +13,29 @@ for path in (str(REPO_ROOT), str(BACKEND_ROOT)):
 from backend.app.main import create_app
 
 
-def test_health_endpoint_returns_ok_payload() -> None:
-    client = TestClient(create_app())
+def test_health_endpoint_returns_ok_payload(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "pm-backend"}
 
 
-def test_root_requires_authentication() -> None:
-    client = TestClient(create_app())
+def test_root_requires_authentication(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
 
 
-def test_login_page_renders_for_unauthenticated_user() -> None:
-    client = TestClient(create_app())
+def test_login_page_renders_for_unauthenticated_user(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     response = client.get("/login")
     assert response.status_code == 200
     assert "Sign in" in response.text
 
 
-def test_login_failure_returns_401() -> None:
-    client = TestClient(create_app())
+def test_login_failure_returns_401(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     response = client.post(
         "/api/auth/login",
         data={"username": "bad", "password": "creds"},
@@ -45,8 +45,8 @@ def test_login_failure_returns_401() -> None:
     assert "Invalid username or password" in response.text
 
 
-def test_login_success_redirects_and_sets_session_cookie() -> None:
-    client = TestClient(create_app())
+def test_login_success_redirects_and_sets_session_cookie(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     response = client.post(
         "/api/auth/login",
         data={"username": "user", "password": "password"},
@@ -57,8 +57,8 @@ def test_login_success_redirects_and_sets_session_cookie() -> None:
     assert "pm_session=" in response.headers.get("set-cookie", "")
 
 
-def test_logout_clears_session_and_redirects() -> None:
-    client = TestClient(create_app())
+def test_logout_clears_session_and_redirects(tmp_path: Path) -> None:
+    client = TestClient(create_app(db_path=tmp_path / "pm.db"))
     client.post("/api/auth/login", data={"username": "user", "password": "password"})
     response = client.post("/api/auth/logout", follow_redirects=False)
     assert response.status_code == 303
@@ -67,7 +67,7 @@ def test_logout_clears_session_and_redirects() -> None:
 
 def test_root_returns_503_when_frontend_is_missing(tmp_path: Path) -> None:
     missing_dir = tmp_path / "not-built"
-    client = TestClient(create_app(missing_dir))
+    client = TestClient(create_app(missing_dir, db_path=tmp_path / "pm.db"))
     client.post("/api/auth/login", data={"username": "user", "password": "password"})
 
     response = client.get("/")
@@ -84,7 +84,7 @@ def test_root_serves_frontend_index_when_built(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    client = TestClient(create_app(dist_dir))
+    client = TestClient(create_app(dist_dir, db_path=tmp_path / "pm.db"))
     client.post("/api/auth/login", data={"username": "user", "password": "password"})
     response = client.get("/")
 
@@ -99,9 +99,28 @@ def test_serves_next_static_assets_when_present(tmp_path: Path) -> None:
     (dist_dir / "index.html").write_text("<html><body>ok</body></html>", encoding="utf-8")
     (next_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
 
-    client = TestClient(create_app(dist_dir))
+    client = TestClient(create_app(dist_dir, db_path=tmp_path / "pm.db"))
     client.post("/api/auth/login", data={"username": "user", "password": "password"})
     response = client.get("/_next/static/app.js")
 
     assert response.status_code == 200
     assert "console.log('ok');" in response.text
+
+
+def test_frontend_fallback_rejects_path_traversal_outside_dist(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text("<html><body>ok</body></html>", encoding="utf-8")
+
+    secret_dir = tmp_path / "secret"
+    secret_dir.mkdir(parents=True)
+    (secret_dir / "top-secret.txt").write_text("TOP_SECRET", encoding="utf-8")
+
+    client = TestClient(create_app(dist_dir, db_path=tmp_path / "pm.db"))
+    client.post("/api/auth/login", data={"username": "user", "password": "password"})
+
+    response = client.get("/%2e%2e/secret/top-secret.txt")
+
+    assert response.status_code == 200
+    assert "TOP_SECRET" not in response.text
+    assert "<html><body>ok</body></html>" in response.text

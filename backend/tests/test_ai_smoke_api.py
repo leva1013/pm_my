@@ -10,7 +10,7 @@ for path in (str(REPO_ROOT), str(BACKEND_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-import backend.app.main as main_module
+import backend.app.routes.ai as ai_routes
 from backend.app.ai_client import AiClientError
 from backend.app.main import create_app
 
@@ -43,7 +43,7 @@ def test_smoke_success_with_mocked_provider(tmp_path: Path, monkeypatch) -> None
             "response": "4",
         }
 
-    monkeypatch.setattr(main_module, "run_smoke_test", fake_smoke)
+    monkeypatch.setattr(ai_routes, "run_smoke_test", fake_smoke)
     response = client.post("/api/ai/smoke")
 
     assert response.status_code == 200
@@ -58,7 +58,7 @@ def test_smoke_maps_missing_key_error(tmp_path: Path, monkeypatch) -> None:
     def fake_smoke() -> dict[str, str]:
         raise AiClientError("missing_api_key", "OPENROUTER_API_KEY is not set.")
 
-    monkeypatch.setattr(main_module, "run_smoke_test", fake_smoke)
+    monkeypatch.setattr(ai_routes, "run_smoke_test", fake_smoke)
     response = client.post("/api/ai/smoke")
 
     assert response.status_code == 500
@@ -72,7 +72,7 @@ def test_smoke_maps_provider_errors(tmp_path: Path, monkeypatch) -> None:
     def fake_smoke() -> dict[str, str]:
         raise AiClientError("provider_error", "Provider returned status 500")
 
-    monkeypatch.setattr(main_module, "run_smoke_test", fake_smoke)
+    monkeypatch.setattr(ai_routes, "run_smoke_test", fake_smoke)
     response = client.post("/api/ai/smoke")
 
     assert response.status_code == 502

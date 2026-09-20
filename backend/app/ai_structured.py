@@ -12,6 +12,62 @@ ALLOWED_OPERATION_TYPES = {
 }
 
 
+def _operation_schema(
+    op_type: str, required: list[str], properties: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["type", *required],
+        "properties": {"type": {"const": op_type}, **properties},
+    }
+
+
+def _operation_schemas() -> list[dict[str, Any]]:
+    return [
+        _operation_schema(
+            "rename_column",
+            ["columnId", "newTitle"],
+            {
+                "columnId": {"type": "string", "minLength": 1},
+                "newTitle": {"type": "string", "minLength": 1, "maxLength": 80},
+            },
+        ),
+        _operation_schema(
+            "create_card",
+            ["columnId", "title"],
+            {
+                "columnId": {"type": "string", "minLength": 1},
+                "title": {"type": "string", "minLength": 1, "maxLength": 160},
+                "details": {"type": "string", "maxLength": 2000},
+            },
+        ),
+        _operation_schema(
+            "edit_card",
+            ["cardId"],
+            {
+                "cardId": {"type": "string", "minLength": 1},
+                "title": {"type": "string", "minLength": 1, "maxLength": 160},
+                "details": {"type": "string", "maxLength": 2000},
+            },
+        ),
+        _operation_schema(
+            "move_card",
+            ["cardId", "toColumnId"],
+            {
+                "cardId": {"type": "string", "minLength": 1},
+                "toColumnId": {"type": "string", "minLength": 1},
+                "position": {"type": "integer", "minimum": 0},
+            },
+        ),
+        _operation_schema(
+            "delete_card",
+            ["cardId"],
+            {"cardId": {"type": "string", "minLength": 1}},
+        ),
+    ]
+
+
 def structured_output_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -24,19 +80,13 @@ def structured_output_schema() -> dict[str, Any]:
                 "maxLength": 4000,
             },
             "shouldUpdateBoard": {"type": "boolean"},
+            # shouldUpdateBoard == false => operations must be empty is enforced by
+            # validate_structured_response, not here: cross-field conditionals
+            # (JSON Schema if/then) aren't reliably supported by provider strict modes.
             "operations": {
                 "type": "array",
                 "maxItems": 50,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {
-                            "type": "string",
-                            "enum": sorted(ALLOWED_OPERATION_TYPES),
-                        }
-                    },
-                    "required": ["type"],
-                },
+                "items": {"oneOf": _operation_schemas()},
             },
         },
     }

@@ -10,7 +10,7 @@ for path in (str(REPO_ROOT), str(BACKEND_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-import backend.app.main as main_module
+import backend.app.routes.ai as ai_routes
 from backend.app.ai_client import AiClientError
 from backend.app.main import create_app
 
@@ -53,7 +53,7 @@ def test_chat_noop_response_keeps_board(tmp_path: Path, monkeypatch) -> None:
             "operations": [],
         }
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
 
     before = client.get("/api/board").json()
     response = client.post("/api/ai/chat", json={"message": "status?", "history": []})
@@ -82,7 +82,7 @@ def test_chat_applies_and_persists_valid_operations(tmp_path: Path, monkeypatch)
             ],
         }
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
     response = client.post("/api/ai/chat", json={"message": "rename backlog", "history": []})
 
     assert response.status_code == 200
@@ -104,7 +104,7 @@ def test_chat_rejects_invalid_ai_structure(tmp_path: Path, monkeypatch) -> None:
             "operations": [{"type": "delete_card", "cardId": "card-1"}],
         }
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
     response = client.post("/api/ai/chat", json={"message": "bad", "history": []})
 
     assert response.status_code == 502
@@ -117,7 +117,7 @@ def test_chat_maps_ai_client_errors(tmp_path: Path, monkeypatch) -> None:
     def fake_structured(**kwargs):
         raise AiClientError("network_error", "Network error")
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
     response = client.post("/api/ai/chat", json={"message": "hello", "history": []})
 
     assert response.status_code == 502
@@ -140,7 +140,7 @@ def test_chat_rejects_invalid_semantic_ops(tmp_path: Path, monkeypatch) -> None:
             ],
         }
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
     response = client.post("/api/ai/chat", json={"message": "move it", "history": []})
 
     assert response.status_code == 422
@@ -161,7 +161,7 @@ def test_chat_deduplicates_trailing_user_message(tmp_path: Path, monkeypatch) ->
             "operations": [],
         }
 
-    monkeypatch.setattr(main_module, "call_openrouter_structured", fake_structured)
+    monkeypatch.setattr(ai_routes, "call_openrouter_structured", fake_structured)
 
     response = client.post(
         "/api/ai/chat",

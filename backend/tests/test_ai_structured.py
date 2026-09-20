@@ -8,7 +8,7 @@ for path in (str(REPO_ROOT), str(BACKEND_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from backend.app.ai_structured import validate_structured_response
+from backend.app.ai_structured import ALLOWED_OPERATION_TYPES, structured_output_schema, validate_structured_response
 from backend.app.board_defaults import INITIAL_BOARD
 from backend.app.board_operations import apply_operations
 
@@ -65,6 +65,26 @@ def test_apply_operations_is_atomic_and_applies_changes() -> None:
     review_column = next(c for c in result["columns"] if c["id"] == "col-review")
     assert review_column["cardIds"][0] == "card-1"
     assert INITIAL_BOARD["columns"][0]["title"] == "Backlog"
+
+
+def test_provider_schema_requires_per_operation_type_fields() -> None:
+    schema = structured_output_schema()
+    branches = schema["properties"]["operations"]["items"]["oneOf"]
+
+    assert len(branches) == len(ALLOWED_OPERATION_TYPES)
+
+    branches_by_type = {branch["properties"]["type"]["const"]: branch for branch in branches}
+    assert set(branches_by_type) == ALLOWED_OPERATION_TYPES
+
+    for op_type, branch in branches_by_type.items():
+        assert branch["additionalProperties"] is False
+        assert "type" in branch["required"]
+
+    assert set(branches_by_type["rename_column"]["required"]) == {"type", "columnId", "newTitle"}
+    assert set(branches_by_type["create_card"]["required"]) == {"type", "columnId", "title"}
+    assert set(branches_by_type["edit_card"]["required"]) == {"type", "cardId"}
+    assert set(branches_by_type["move_card"]["required"]) == {"type", "cardId", "toColumnId"}
+    assert set(branches_by_type["delete_card"]["required"]) == {"type", "cardId"}
 
 
 def test_apply_operations_rejects_invalid_semantics() -> None:

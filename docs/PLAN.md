@@ -239,6 +239,47 @@ Every part must satisfy all of the following before it is considered done:
 - External blocker for live mutating AI e2e: provider responses repeatedly returned invalid operation fields (empty required strings), resulting in 502 responses with details like `newTitle must be a non-empty string` and `columnId must be a non-empty string`.
 - Containerized sign-off completed: `docker compose up -d --build` succeeded, `/api/health` returned `ok`, Playwright ran with 8 passed and 1 skipped, and `docker compose down` succeeded.
 
+## Post-Part-10 remediation (2026-09-20)
+
+Full-repo review (`docs/code_review.md`) surfaced a critical path-traversal bug and several persistence/hygiene/AI-contract gaps. Fixed and re-verified before returning to feature work:
+
+- Fixed path-traversal/arbitrary-file-read in the static-file fallback route (`backend/app/main.py`): `full_path` is now resolved and checked with `is_relative_to()` against the frontend dist directory before serving. Verified against both an in-process `TestClient` and the running Docker container with an encoded `..` payload (`/%2e%2e/...`) — confirmed it no longer escapes the served directory.
+- Fixed board-data loss on container recreate: added a bind mount (`./backend/data:/app/backend/data`) to `docker-compose.yml`. Verified by setting a marker value via `PUT /api/board`, running `docker compose down` + `docker compose up --build -d` (the exact cycle `scripts/stop-server-*`/`start-server-*` perform), and confirming the marker survived.
+- Fixed test isolation: every `create_app()` call in `backend/tests/test_app.py` now passes an explicit `tmp_path`-backed `db_path`, so running the suite no longer touches the shared dev database.
+- Untracked `backend/data/pm.db` from git and added `backend/data/*.db` to `.gitignore` (file remains on disk, `.dockerignore` already kept it out of built images).
+- Tightened `structured_output_schema()` in `backend/app/ai_structured.py` to send OpenRouter a `oneOf` schema with per-operation-type `required` fields and `additionalProperties: false`, matching the approved contract in `docs/AI_STRUCTURED_OUTPUT_SCHEMA.md`, instead of a schema that only constrained the `type` field.
+- Fixed a pre-existing lint failure in `AiSidebar.tsx` (unescaped quotes) found while re-running the full check suite.
+
+### Re-verification evidence (2026-09-20)
+
+- Backend: `pytest backend/tests` — 37 passed (added a traversal regression test and a provider-schema shape test).
+- Frontend: `npm run lint` clean, `npm run test:unit` — 7 passed, `npm run build` succeeded.
+- Playwright against `uvicorn` with the built frontend: 8 passed, 1 skipped (no `OPENROUTER_API_KEY` in this shell).
+- Playwright against the rebuilt Docker container: 8 passed, 1 skipped — same baseline as the original Part 10 sign-off.
+- Manual persistence check across `docker compose down` + `up --build -d`: board marker value survived.
+- Manual traversal check against the live container: encoded `..` payload now falls back to the SPA shell instead of leaking `backend/app/main.py`.
+
+## Backend module refactor (2026-09-20)
+
+`backend/app/main.py` had grown into a monolithic module (app factory, inline login-page HTML, and all nine routes). Split into a thin app factory plus focused modules/packages:
+
+- `backend/app/main.py` — app factory only: initializes the DB, stores `frontend_dist`/`db_path` on `app.state`, adds session middleware, includes routers.
+- `backend/app/routes/` (new package) — one router module per concern: `health.py`, `board.py`, `ai.py`, `auth.py`, `frontend.py` (static/SPA serving, including the traversal-safe catch-all).
+- `backend/app/deps.py` (new) — shared `require_username`/`get_db_path` FastAPI dependencies, replacing the repeated hand-rolled `session_username(request.session)` check called out as a maintenance risk in `CLAUDE.md`.
+- `backend/app/login_page.py` (new) — the inline login-page HTML, extracted out of route logic.
+- `backend/app/paths.py` (new) — single `REPO_ROOT` constant, replacing the `Path(__file__).resolve().parents[N]` computation that was previously duplicated (and depth-fragile) across `main.py` and `db.py`.
+- No route behavior, response shapes, or status codes changed. Two test files (`test_ai_chat_api.py`, `test_ai_smoke_api.py`) had their `monkeypatch.setattr` targets updated from `backend.app.main` to `backend.app.routes.ai`, since that's where `call_openrouter_structured`/`run_smoke_test` are now imported and called.
+- `CLAUDE.md`'s architecture section updated to describe the new module layout.
+
+### Re-verification evidence (2026-09-20, post-refactor)
+
+- Backend: `pytest backend/tests` — 37 passed, no changes needed beyond the two monkeypatch-target updates above.
+- Frontend: `npm run lint` clean, `npm run test:unit` — 7 passed (frontend untouched by this refactor).
+- Docker: full rebuild (`docker compose up --build -d`) succeeded against the new package layout; `/api/health` OK.
+- Playwright against the rebuilt container: 8 passed, 1 skipped — same baseline.
+- Re-ran the path-traversal check against a file that only exists post-refactor (`backend/app/routes/board.py`): still blocked, falls back to the SPA shell.
+- Re-ran the persistence check across a full `docker compose down` + `up --build -d` cycle with a fresh marker value: survived.
+
 ## Explicit hold points
 
 - Hold point A: After Part 1 docs updates, wait for user approval.

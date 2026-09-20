@@ -75,7 +75,7 @@ export const AiSidebar = ({ onBoardUpdate }: AiSidebarProps) => {
       <div className="mt-4 space-y-3 rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3" data-testid="ai-messages">
         {history.length === 0 ? (
           <p className="text-sm text-[var(--gray-text)]">
-            Try: "Move card-1 to Review" or "Rename Backlog to Ideas".
+            Try: &quot;Move card-1 to Review&quot; or &quot;Rename Backlog to Ideas&quot;.
           </p>
         ) : (
           history.map((message, index) => (

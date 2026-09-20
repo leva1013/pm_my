@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from backend.app.board_defaults import INITIAL_BOARD
+from backend.app.paths import REPO_ROOT
 
 DEFAULT_DB_RELATIVE_PATH = Path("backend") / "data" / "pm.db"
 
@@ -13,8 +14,7 @@ DEFAULT_DB_RELATIVE_PATH = Path("backend") / "data" / "pm.db"
 def resolve_db_path(db_path: Path | None = None) -> Path:
     if db_path is not None:
         return db_path
-    repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / DEFAULT_DB_RELATIVE_PATH
+    return REPO_ROOT / DEFAULT_DB_RELATIVE_PATH
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
