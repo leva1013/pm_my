@@ -42,12 +42,18 @@ test("moves a card between columns", async ({ page }) => {
 
   const card = page.locator('[data-testid^="card-"]', { hasText: cardTitle }).first();
   await expect(card).toBeVisible();
+  await card.scrollIntoViewIfNeeded();
   const targetColumn = page.getByTestId("column-col-review");
   const cardBox = await card.boundingBox();
   const columnBox = await targetColumn.boundingBox();
-  if (!cardBox || !columnBox) {
+  const viewport = page.viewportSize();
+  if (!cardBox || !columnBox || !viewport) {
     throw new Error("Unable to resolve drag coordinates.");
   }
+  // The board accumulates cards across runs, so the page may be scrolled;
+  // drop in the middle of the target column's on-screen portion.
+  const visibleTop = Math.max(columnBox.y, 0);
+  const visibleBottom = Math.min(columnBox.y + columnBox.height, viewport.height);
 
   await page.mouse.move(
     cardBox.x + cardBox.width / 2,
@@ -56,7 +62,7 @@ test("moves a card between columns", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(
     columnBox.x + columnBox.width / 2,
-    columnBox.y + 120,
+    (visibleTop + visibleBottom) / 2,
     { steps: 12 }
   );
   await page.mouse.up();
@@ -227,4 +233,68 @@ test("applies mutating ai response to board immediately", async ({ page }) => {
 
   await expect(page.getByText("Backlog renamed to AI Ideas.")).toBeVisible();
   await expect(page.locator('input[value="AI Ideas"]').first()).toBeVisible();
+});
+
+test("deletes a card with the trash icon", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Username").fill("user");
+  await page.getByLabel("Password").fill("password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  const cardTitle = `Delete card ${Date.now()}`;
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill(cardTitle);
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+
+  const card = page.locator('[data-testid^="card-"]', { hasText: cardTitle });
+  await card.hover();
+  const deleteButton = card.getByRole("button", { name: `Delete ${cardTitle}` });
+  await expect(deleteButton).toBeVisible();
+  await deleteButton.click();
+  await expect(card).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.locator('[data-testid^="card-"]', { hasText: cardTitle })).toHaveCount(0);
+});
+
+test("collapses and reopens the ai sidebar", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Username").fill("user");
+  await page.getByLabel("Password").fill("password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const lastColumn = page.locator('[data-testid^="column-"]').last();
+  await expect(lastColumn).toBeVisible();
+  const widthBefore = (await lastColumn.boundingBox())?.width ?? 0;
+
+  await page.getByRole("button", { name: "Collapse AI assistant" }).click();
+  await expect(page.getByLabel("AI message")).toHaveCount(0);
+  const widthAfter = (await lastColumn.boundingBox())?.width ?? 0;
+  expect(widthAfter).toBeGreaterThan(widthBefore);
+
+  await page.getByRole("button", { name: "Open AI assistant" }).click();
+  await expect(page.getByLabel("AI message")).toBeVisible();
+});
+
+test("board fills the viewport width on wide screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await page.getByLabel("Username").fill("user");
+  await page.getByLabel("Password").fill("password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const sidebar = page.getByTestId("ai-sidebar");
+  await expect(sidebar).toBeVisible();
+  const sidebarBox = await sidebar.boundingBox();
+  expect(sidebarBox).not.toBeNull();
+  expect(sidebarBox!.x + sidebarBox!.width).toBeGreaterThan(1850);
+
+  const columns = page.locator('[data-testid^="column-"]');
+  for (let index = 0; index < 5; index += 1) {
+    const box = await columns.nth(index).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(240);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(sidebarBox!.x);
+  }
 });

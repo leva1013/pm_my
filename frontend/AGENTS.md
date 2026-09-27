@@ -28,6 +28,13 @@ This document describes the current frontend implementation and the rules to fol
   - src/components/KanbanCard.tsx renders sortable cards
   - src/components/NewCardForm.tsx handles add-card interaction
   - src/components/KanbanCardPreview.tsx renders drag overlay preview
+  - src/components/AiSidebar.tsx renders the collapsible AI chat panel
+  - src/components/icons.tsx holds inline SVG icons (no icon library dependency)
+- Layout:
+  - Full-width, viewport-height layout on lg+: compact header, columns share the
+    available width (min 200px each, horizontal scroll when they do not fit), AI
+    panel docked on the right and collapsible to a small rail
+  - Below lg the AI panel stacks under the board; on phones columns snap-scroll
 
 ## Current behavior baseline
 

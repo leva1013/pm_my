@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { Card } from "@/lib/kanban";
+import { TrashIcon } from "@/components/icons";
 
 type KanbanCardProps = {
   card: Card;
@@ -22,32 +23,32 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "rounded-2xl border border-transparent bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
-        "transition-all duration-150",
-        isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
+        "group relative cursor-grab rounded-xl border border-[var(--stroke)] bg-white p-3 shadow-[0_1px_2px_rgba(3,33,71,0.06)]",
+        "transition-[box-shadow,border-color,opacity] duration-150 hover:border-[rgba(32,157,215,0.35)] hover:shadow-[0_6px_16px_rgba(3,33,71,0.08)]",
+        isDragging && "opacity-40"
       )}
       {...attributes}
       {...listeners}
       data-testid={`card-${card.id}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
-            {card.title}
-          </h4>
-          <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
-            {card.details}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onDelete(card.id)}
-          className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
-          aria-label={`Delete ${card.title}`}
-        >
-          Remove
-        </button>
-      </div>
+      <h4 className="pr-7 font-display text-sm font-semibold leading-5 text-[var(--navy-dark)] [overflow-wrap:anywhere]">
+        {card.title}
+      </h4>
+      {card.details ? (
+        <p className="mt-1 text-[13px] leading-5 text-[var(--gray-text)] [overflow-wrap:anywhere]">
+          {card.details}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => onDelete(card.id)}
+        onPointerDown={(event) => event.stopPropagation()}
+        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg text-[var(--gray-text)] opacity-0 transition hover:bg-[#fef3f2] hover:text-[#b42318] focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-[var(--primary-blue)] group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        aria-label={`Delete ${card.title}`}
+        title="Delete card"
+      >
+        <TrashIcon width={15} height={15} />
+      </button>
     </article>
   );
 };

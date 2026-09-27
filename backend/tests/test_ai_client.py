@@ -41,7 +41,8 @@ def test_call_openrouter_builds_request_and_extracts_content() -> None:
     assert isinstance(captured["payload"], dict)
 
 
-def test_call_openrouter_rejects_missing_key() -> None:
+def test_call_openrouter_rejects_missing_key(monkeypatch) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     try:
         call_openrouter(prompt="What is 2+2?", api_key="")
     except AiClientError as exc:

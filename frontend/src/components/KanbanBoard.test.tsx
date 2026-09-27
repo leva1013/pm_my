@@ -52,6 +52,47 @@ describe("KanbanBoard", () => {
     expect(await screen.findAllByTestId(/column-/i)).toHaveLength(5);
   });
 
+  it("shows a pluralized card count per column", async () => {
+    render(<KanbanBoard />);
+    await screen.findAllByTestId(/column-/i);
+    const column = getFirstColumn();
+    const expected = currentBoard.columns[0].cardIds.length;
+    const label = `${expected} ${expected === 1 ? "card" : "cards"}`;
+    expect(
+      within(column).getByText((_, element) => element?.tagName === "SPAN" && element.textContent === label)
+    ).toBeInTheDocument();
+  });
+
+  it("collapses and reopens the ai sidebar", async () => {
+    render(<KanbanBoard />);
+    await screen.findAllByTestId(/column-/i);
+
+    await userEvent.click(screen.getByRole("button", { name: "Collapse AI assistant" }));
+    expect(screen.queryByLabelText("AI message")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    expect(screen.getByLabelText("AI message")).toBeInTheDocument();
+  });
+
+  it("disables ai send until a message is typed", async () => {
+    render(<KanbanBoard />);
+    await screen.findAllByTestId(/column-/i);
+    const sendButton = screen.getByRole("button", { name: "Send" });
+    expect(sendButton).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("AI message"), "hi");
+    expect(sendButton).toBeEnabled();
+  });
+
+  it("cancels the add card form", async () => {
+    render(<KanbanBoard />);
+    await screen.findAllByTestId(/column-/i);
+    const column = getFirstColumn();
+    await userEvent.click(within(column).getByRole("button", { name: /add a card/i }));
+    await userEvent.click(within(column).getByRole("button", { name: "Cancel" }));
+    expect(within(column).queryByPlaceholderText(/card title/i)).not.toBeInTheDocument();
+    expect(within(column).getByRole("button", { name: /add a card/i })).toBeInTheDocument();
+  });
+
   it("renames a column", async () => {
     render(<KanbanBoard />);
     await screen.findAllByTestId(/column-/i);
@@ -147,5 +188,9 @@ describe("KanbanBoard", () => {
 
     expect(await screen.findByText("Backlog renamed to Ideas.")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Ideas")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("AI message"), "Rename again{Enter}");
+    expect(await screen.findByText("Rename again")).toBeInTheDocument();
+    expect(screen.getByLabelText("AI message")).toHaveValue("");
   });
 });
